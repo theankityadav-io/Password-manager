@@ -10,62 +10,68 @@ st.set_page_config(page_title="VaultPro Elite", page_icon="🔐", layout="wide")
 # --- ADVANCED CUSTOM CSS ---
 st.markdown("""
     <style>
-    /* Background Gradient */
-    .stApp {
-        background: radial-gradient(circle at top left, #1e1e2f, #11111d);
-        color: #ffffff;
-    }
-
-    /* Modern Poppins Font */
+    .stApp { background: radial-gradient(circle at top left, #1e1e2f, #11111d); color: #ffffff; }
     @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;700&display=swap');
-    html, body, [class*="css"] {
-        font-family: 'Poppins', sans-serif;
+    html, body, [class*="css"] { font-family: 'Poppins', sans-serif; }
+    
+    /* Bento Card Button Styling */
+    div.stButton > button {
+        background: rgba(255, 255, 255, 0.03) !important;
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+        border-radius: 20px !important;
+        padding: 40px 20px !important;
+        height: 180px !important;
+        width: 100% !important;
+        transition: 0.4s ease !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+    
+    div.stButton > button:hover {
+        border: 1px solid #7f5af0 !important;
+        transform: translateY(-5px) !important;
+        box-shadow: 0 0 20px rgba(127, 90, 240, 0.4) !important;
+        background: rgba(127, 90, 240, 0.1) !important;
     }
 
-    /* Glassmorphism Cards */
-    .bento-card {
-        background: rgba(255, 255, 255, 0.03);
-        border-radius: 20px;
-        padding: 25px;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        backdrop-filter: blur(15px);
-        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-        transition: 0.4s ease;
-        text-align: center;
-        margin-bottom: 20px;
-    }
-    .bento-card:hover {
-        border: 1px solid #7f5af0;
-        transform: translateY(-5px);
-        box-shadow: 0 0 20px rgba(127, 90, 240, 0.4);
-    }
-
-    /* Custom Buttons */
-    .stButton>button {
-        background: linear-gradient(90deg, #7f5af0, #2cb67d);
+    .icon-text { font-size: 50px; margin-bottom: 10px; display: block; }
+    .label-text { font-size: 18px; font-weight: 600; color: #94a1b2; }
+    
+    /* Input Fields Styling */
+    .stTextInput>div>div>input {
+        background-color: rgba(255, 255, 255, 0.05) !important;
         color: white !important;
-        border: none;
-        border-radius: 10px;
-        padding: 10px 25px;
-        font-weight: 700;
-        width: 100%;
-        transition: 0.3s;
+        border: 1px solid rgba(255, 255, 255, 0.2) !important;
     }
-    .stButton>button:hover {
-        opacity: 0.8;
-        box-shadow: 0px 0px 15px #7f5af0;
-    }
-
-    /* Hide Streamlit elements */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    header {visibility: hidden;}
     </style>
     """, unsafe_allow_html=True)
 
-# --- DATABASE LOGIC ---
+# --- BACKEND LOGIC ---
 USER_DB = "users.csv"
 VAULT_DB = "vault_data.csv"
+
+def save_user(email, password):
+    if not os.path.exists(USER_DB):
+        pd.DataFrame(columns=['email', 'password']).to_csv(USER_DB, index=False)
+    df = pd.read_csv(USER_DB)
+    if email in df['email'].values: return False
+    pd.DataFrame([[email, password]], columns=['email', 'password']).to_csv(USER_DB, mode='a', header=False, index=False)
+    return True
+
+def verify_user(email, password):
+    if not os.path.exists(USER_DB): return False
+    df = pd.read_csv(USER_DB)
+    user = df[(df['email'] == email) & (df['password'] == str(password))]
+    return not user.empty
+
+def save_to_vault(owner, service, username, pwd):
+    if not os.path.exists(VAULT_DB):
+        pd.DataFrame(columns=['owner', 'service', 'username', 'password']).to_csv(VAULT_DB, index=False)
+    new_entry = pd.DataFrame([[owner, service, username, pwd]], columns=['owner', 'service', 'username', 'password'])
+    new_entry.to_csv(VAULT_DB, mode='a', header=False, index=False)
+    return True
 
 def generate_password(length):
     chars = string.ascii_letters + string.digits + "!@#$%^&*"
@@ -84,75 +90,93 @@ if 'logged_in' not in st.session_state: st.session_state.logged_in = False
 if 'user_email' not in st.session_state: st.session_state.user_email = ""
 if 'menu_choice' not in st.session_state: st.session_state.menu_choice = "Home"
 
-# --- TOP HEADER ---
-st.markdown("<h1 style='text-align: center; color: #7f5af0;'>🛡️ VAULT PRO <span style='color:#2cb67d;'>ELITE</span></h1>", unsafe_allow_html=True)
-st.markdown("<p style='text-align: center; color: #94a1b2;'>The most secure way to manage your digital life.</p>", unsafe_allow_html=True)
+# --- MAIN UI ---
+st.markdown("<h1 style='text-align: center; color: #7f5af0; margin-bottom: 30px;'>🛡️ VAULT PRO <span style='color:#2cb67d;'>ELITE</span></h1>", unsafe_allow_html=True)
 
-# --- BENTO DASHBOARD NAVIGATION ---
+# Navigation with Clickable Cards (Icons + Labels inside buttons)
 col1, col2, col3, col4 = st.columns(4)
 
 with col1:
-    st.markdown("<div class='bento-card'><h3>🎲</h3><p>Generator</p></div>", unsafe_allow_html=True)
-    if st.button("Open Generator", key="btn_gen"): st.session_state.menu_choice = "Gen"
+    if st.button("🎲\nGenerator", key="gen_btn"):
+        st.session_state.menu_choice = "Gen"
 
 with col2:
-    st.markdown("<div class='bento-card'><h3>⚡</h3><p>Strength</p></div>", unsafe_allow_html=True)
-    if st.button("Check Power", key="btn_check"): st.session_state.menu_choice = "Check"
+    if st.button("⚡\nStrength", key="check_btn"):
+        st.session_state.menu_choice = "Check"
 
 with col3:
-    st.markdown("<div class='bento-card'><h3>📥</h3><p>Save</p></div>", unsafe_allow_html=True)
-    if st.button("Secure Entry", key="btn_save"): st.session_state.menu_choice = "Save"
+    if st.button("📥\nSave Data", key="save_btn"):
+        st.session_state.menu_choice = "Save"
 
 with col4:
-    st.markdown("<div class='bento-card'><h3>🗝️</h3><p>My Vault</p></div>", unsafe_allow_html=True)
-    if st.button("Access Data", key="btn_view"): st.session_state.menu_choice = "View"
+    if st.button("🗝️\nMy Vault", key="view_btn"):
+        st.session_state.menu_choice = "View"
 
 st.markdown("---")
 
-# --- FEATURES LOGIC ---
+# --- FEATURE DISPLAY ---
 choice = st.session_state.menu_choice
 
 if choice == "Gen":
-    st.subheader("🛠️ Smart Password Generator")
-    length = st.select_slider("Length of Password", options=range(8, 33), value=16)
-    if st.button("Generate Elite Password"):
-        p = generate_password(length)
-        st.code(p, language="text")
-        st.toast("Generated!", icon="✅")
+    st.subheader("🛠️ Elite Password Generator")
+    length = st.select_slider("Password Length", options=range(8, 33), value=16)
+    if st.button("Generate Now"):
+        pwd = generate_password(length)
+        st.code(pwd)
+        st.toast("Elite Password Generated!")
 
 elif choice == "Check":
-    st.subheader("📊 Deep Strength Analysis")
-    p_input = st.text_input("Enter password to analyze", type="password")
+    st.subheader("📊 Security Analyzer")
+    p_input = st.text_input("Enter password to test", type="password")
     if p_input:
         s = check_strength(p_input)
         st.progress(s * 25 if s <= 4 else 100)
-        st.markdown(f"**Security Score:** {s}/4")
+        st.write(f"Strength Score: {s}/4")
 
 elif choice in ["Save", "View"]:
     if not st.session_state.logged_in:
-        st.info("👋 This is a secure zone. Please Log In to continue.")
-        # --- LOGIN / SIGNUP UI ---
-        t1, t2 = st.tabs(["🔐 Login", "📝 Create Account"])
+        st.info("🔒 Secure features require login.")
+        t1, t2 = st.tabs(["🔐 Login", "📝 Register"])
         with t1:
-            email = st.text_input("Email")
-            pwd = st.text_input("Password", type="password")
-            if st.button("Let Me In"):
-                # verify_user function logic here
-                st.session_state.logged_in = True
-                st.session_state.user_email = email
-                st.rerun()
+            e = st.text_input("Email", key="l_email")
+            p = st.text_input("Password", type="password", key="l_pass")
+            if st.button("Enter Vault"):
+                if verify_user(e, p):
+                    st.session_state.logged_in = True
+                    st.session_state.user_email = e
+                    st.rerun()
+                else: st.error("Invalid credentials.")
+        with t2:
+            ne = st.text_input("New Email", key="r_email")
+            np = st.text_input("New Password", type="password", key="r_pass")
+            if st.button("Create Account"):
+                if save_user(ne, np): st.success("Success! Please Login.")
+                else: st.error("User already exists.")
     else:
         if choice == "Save":
-            st.subheader("📝 Add New Credential")
-            with st.container():
-                srv = st.text_input("Service Name")
-                usr = st.text_input("Username")
-                pas = st.text_input("Password", type="password")
-                if st.button("Lock It Now"):
-                    # save_to_vault logic
-                    st.success(f"Encrypted and saved for {srv}!")
+            st.subheader("📝 Secure New Record")
+            srv = st.text_input("Service Name (e.g. GitHub)")
+            usr = st.text_input("Username/Email")
+            pas = st.text_input("Password", type="password")
+            if st.button("Lock and Save"):
+                if srv and usr and pas:
+                    save_to_vault(st.session_state.user_email, srv, usr, pas)
+                    st.success(f"Encrypted record for {srv} saved!")
+                else: st.warning("Please fill all fields.")
         
         elif choice == "View":
-            st.subheader("🗄️ Your Encrypted Vault")
-            st.warning("Only you can see this data.")
-            # Show dataframe logic here
+            st.subheader("🗄️ Your Decrypted Records")
+            if os.path.exists(VAULT_DB):
+                df = pd.read_csv(VAULT_DB)
+                user_data = df[df['owner'] == st.session_state.user_email]
+                if not user_data.empty:
+                    st.dataframe(user_data[['service', 'username', 'password']], use_container_width=True)
+                else: st.warning("No records found in your vault.")
+            else: st.info("Database is currently empty.")
+
+# --- SIDEBAR LOGOUT ---
+if st.session_state.logged_in:
+    if st.sidebar.button("🚪 Logout / Clear Session"):
+        st.session_state.logged_in = False
+        st.session_state.menu_choice = "Home"
+        st.rerun()
